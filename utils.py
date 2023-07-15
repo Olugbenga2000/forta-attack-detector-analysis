@@ -1,0 +1,133 @@
+import requests
+import pandas as pd
+from constants import VALID_NETWORKS, REQUIRED_COLUMNS
+
+forta_api = "https://api.forta.network/graphql"
+headers = {"content-type": "application/json"}
+query = """
+query exampleQuery($input: AlertsInput) {
+  alerts(input: $input) {
+    alerts {
+      name
+      addresses
+      hash
+      chainId
+    }
+    pageInfo {
+      hasNextPage
+      endCursor {
+        blockNumber
+        alertId
+      }
+    }
+  }
+}
+"""
+
+
+def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
+
+    query_variables = {
+        "input": {
+            "first": 500,
+            "blockDateRange": {
+                "startDate": start_date,
+                "endDate": end_date
+            },
+            "chainId": chainid,
+            "bots": bots
+        }
+    }
+
+    all_alerts = []
+    next_page_exists = True
+
+    while next_page_exists:
+     # query Forta API
+        payload = dict(query=query, variables=query_variables)
+        try:
+            response = requests.request(
+                "POST", forta_api, json=payload, headers=headers)
+            response.raise_for_status()
+            # collect alerts
+            if response.status_code == 200:
+                data = response.json()['data']['alerts']
+                alerts = data['alerts']
+                all_alerts += alerts
+        except requests.exceptions.HTTPError as errh:
+            print("HTTP Error")
+            print(errh.args[0])
+        except requests.exceptions.ConnectionError as conerr:
+            print("Connection error")
+        except requests.exceptions.RequestException as errex:
+            print("Exception request")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+
+        # get next page of alerts if it exists
+        next_page_exists = data['pageInfo']['hasNextPage']
+        # endCursor contains alert Id and block number.
+        # This is needed to get the next page of alerts.
+        end_cursor = data['pageInfo']['endCursor']
+        query_variables['input']['after'] = end_cursor
+
+    return all_alerts
+
+
+def find_matching_hashes(df, alerts):
+    # Create an empty list to store the matching hashes for each row
+    matching_hashes = []
+
+    # Iterate over each row in the DataFrame
+    for index, row in df.iterrows():
+        protocol_contracts = row['ProtocolContracts'].split(
+            ',')  # Split the cell values
+
+        row_matching_hashes = []  # Store the matching hashes for the current row
+
+        # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
+        for alert in alerts:
+            for contract in protocol_contracts:
+                if contract.strip() in alert['addresses']:
+                    row_matching_hashes.append(alert['hash'])
+                    break  # Stop checking once a match is found
+
+        if len(row_matching_hashes) == 0:
+            row_matching_hashes = ''
+        # Append the matching hashes for the current row
+        matching_hashes.append(','.join(row_matching_hashes))
+
+    # Assign the matching hashes to a new column in the DataFrame
+    df['MatchingHashes'] = matching_hashes
+
+    return df
+
+
+def clean_files(csv_file_path):
+    # Read the CSV file into a DataFrame
+    df = pd.read_csv(csv_file_path)
+
+    # Check if all required columns are present
+
+    missing_columns = set(REQUIRED_COLUMNS) - set(df.columns)
+    if missing_columns:
+        raise ValueError(
+            f"The CSV file is missing one of the following required columns: {', '.join(missing_columns)}")
+
+    # Filter rows based on the 'Network' column
+
+    df = df[df['Network'].isin(VALID_NETWORKS)]
+
+    # Drop rows with NaN values in 'ProtocolContracts' column
+    df = df.dropna(subset=['ProtocolContracts'])
+
+    # Drop unnecessary columns
+    df = df.loc[:, REQUIRED_COLUMNS]
+
+    # Data cleaning on 'ProtocolContracts'
+    # Convert to lowercase
+    df['ProtocolContracts'] = df['ProtocolContracts'].str.lower()
+    df['ProtocolContracts'] = df['ProtocolContracts'].apply(lambda x: ','.join(filter(
+        lambda y: y.startswith('0x') and len(y) == 42, x.split(','))))  # Filter and join valid values
+
+    return df
