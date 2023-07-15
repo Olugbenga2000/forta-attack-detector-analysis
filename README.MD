@@ -7,6 +7,6 @@ The script analyzes a csv file with attack data and creates a new csv file with 
 * The output is a new csv file(`Final_data.csv`) in the project directory.
 * The csv file must contain 3 major columns - `Attack Name`, `Network` and `ProtocolContracts`.  The script supports the 7 networks supported by Forta Network.
 - `Attack_Detector.csv` contains attacks and the smart contract addresses of protocols involved.
-- `Final_data.csv` contains the output of the script when applied on `Attack_Detector.csv`
-* To adjust the date on which the analyzes should be performed the `START_DATE` and `END_DATE` variables can be modified in `constants.py` file
+- `Final_data.csv` contains the output of the script when applied to `Attack_Detector.csv`
+* To adjust the date on which the analysis should be performed, the `START_DATE` and `END_DATE` variables can be modified in `constants.py` file
 
