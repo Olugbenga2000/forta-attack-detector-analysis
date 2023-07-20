@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 from constants import VALID_NETWORKS, REQUIRED_COLUMNS
+from collections import defaultdict
 
 forta_api = "https://api.forta.network/graphql"
 headers = {"content-type": "application/json"}
@@ -76,31 +77,30 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
 
 def find_matching_hashes(df, alerts):
     # Create an empty list to store the matching hashes for each row
-    matching_hashes = []
-
+    new_lst = []
     # Iterate over each row in the DataFrame
     for index, row in df.iterrows():
         protocol_contracts = row['ProtocolContracts'].split(
             ',')  # Split the cell values
-
-        row_matching_hashes = []  # Store the matching hashes for the current row
+        # Store the matching hashes for the current row
+        matching_hashes_to_addr = defaultdict(list)
 
         # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
         for alert in alerts:
             for contract in protocol_contracts:
                 if contract.strip() in alert['addresses']:
-                    row_matching_hashes.append(alert['hash'])
-                    break  # Stop checking once a match is found
-
-        if len(row_matching_hashes) == 0:
-            row_matching_hashes = ''
-        # Append the matching hashes for the current row
-        matching_hashes.append(','.join(row_matching_hashes))
-
-    # Assign the matching hashes to a new column in the DataFrame
-    df['MatchingHashes'] = matching_hashes
-
-    return df
+                    matching_hashes_to_addr[alert['hash']].append(contract)
+        items = matching_hashes_to_addr.items()
+        if items:
+            for hash, addresses in items:
+                new_row = row.copy()
+                new_row["MatchingHashes"] = hash
+                new_row["matchingcontractaddresses"] = ','.join(addresses)
+                new_lst.append(new_row)
+        else:
+            new_lst.append(row)
+    return pd.DataFrame(new_lst, columns=REQUIRED_COLUMNS +
+                        ["MatchingHashes", "matchingcontractaddresses"])
 
 
 def clean_files(csv_file_path):
