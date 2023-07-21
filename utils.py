@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 from constants import VALID_NETWORKS, REQUIRED_COLUMNS
 from collections import defaultdict
+from bloom_filter import BloomFilter
 
 forta_api = "https://api.forta.network/graphql"
 headers = {"content-type": "application/json"}
@@ -13,6 +14,8 @@ query exampleQuery($input: AlertsInput) {
       addresses
       hash
       chainId
+      addressBloomFilter
+      truncated
     }
     pageInfo {
       hasNextPage
@@ -71,7 +74,7 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
         # This is needed to get the next page of alerts.
         end_cursor = data['pageInfo']['endCursor']
         query_variables['input']['after'] = end_cursor
-
+    print(all_alerts)
     return all_alerts
 
 
@@ -87,8 +90,11 @@ def find_matching_hashes(df, alerts):
 
         # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
         for alert in alerts:
+            b = BloomFilter({'k': alert.addressBloomFilter.k, 'm': alert.addressBloomFilter.k,
+                            'bitset': alert.addressBloomFilter.content})
+            print(b)
             for contract in protocol_contracts:
-                if contract.strip() in alert['addresses']:
+                if contract.strip() in alert['addresses'] or alert.has_address(contract):
                     matching_hashes_to_addr[alert['hash']].append(contract)
         items = matching_hashes_to_addr.items()
         if items:
@@ -131,3 +137,7 @@ def clean_files(csv_file_path):
         lambda y: y.startswith('0x') and len(y) == 42, x.split(','))))  # Filter and join valid values
 
     return df
+
+
+# get_alerts("2023-05-01", "2023-06-30", "1",
+#            ['0x80ed808b586aeebe9cdd4088ea4dea0a8e322909c0e4493c993e060e89c09ed1'])

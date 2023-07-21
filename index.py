@@ -6,7 +6,6 @@ from utils import get_alerts, find_matching_hashes, clean_files
 
 def process_file(csv_file_path):
     df = clean_files(csv_file_path)
-    print(df)
     # Create separate DataFrames for each unique value in 'Network' column
     existing_networks = df['Network'].unique()
     dfs = {value: df[df['Network'] == value].copy()
