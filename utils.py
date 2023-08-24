@@ -1,11 +1,16 @@
+import os
 import requests
 import pandas as pd
 from constants import VALID_NETWORKS, REQUIRED_COLUMNS
 from collections import defaultdict
 from bloom_filter import BloomFilter
 
+from dotenv import load_dotenv
+load_dotenv()
+
 forta_api = "https://api.forta.network/graphql"
-headers = {"content-type": "application/json"}
+headers = {"content-type": "application/json",
+           'Authorization': f"Bearer {os.getenv('FORTA_KEY')}"}
 query = """
 query exampleQuery($input: AlertsInput) {
   alerts(input: $input) {
@@ -90,8 +95,9 @@ def find_matching_hashes(df, alerts):
     for index, row in df.iterrows():
         protocol_contracts = row['ProtocolContracts'].split(
             ',')  # Split the cell values
-        # Store the matching hashes for the current row
-        matching_hashes_to_addr = defaultdict(list)
+        # Store the matching hashes for the current row for TPs and FPs
+        matching_hashes_to_addr_tp = defaultdict(list)
+        matching_hashes_to_addr_fp = defaultdict(list)
 
         # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
         for alert in alerts:
@@ -101,23 +107,48 @@ def find_matching_hashes(df, alerts):
                     {'k': bloomFilter["k"], 'm': bloomFilter["m"], 'bitset': bloomFilter["bitset"]})
                 for contract in protocol_contracts:
                     if contract.strip() in alert['addresses'] or b.has(contract):
-                        matching_hashes_to_addr[alert['hash']].append(contract)
+                        tp = False
+                        for addr in row['Attacker'].split(','):
+                            if addr.strip() in alert['addresses'] or b.has(addr):
+                                matching_hashes_to_addr_tp[alert['hash']].append(
+                                    contract)
+                                tp = True
+                                break
+                        if not tp:
+                            matching_hashes_to_addr_fp[alert['hash']].append(
+                                contract)
             else:
                 for contract in protocol_contracts:
                     if contract.strip() in alert['addresses']:
-                        matching_hashes_to_addr[alert['hash']].append(contract)
+                        tp = False
+                        for addr in row['Attacker'].split(','):
+                            if addr.strip() in alert['addresses']:
+                                matching_hashes_to_addr_tp[alert['hash']].append(
+                                    contract)
+                                tp = True
+                                break
+                        if not tp:
+                            matching_hashes_to_addr_fp[alert['hash']].append(
+                                contract)
 
-        items = matching_hashes_to_addr.items()
-        if items:
-            for hash, addresses in items:
+        items_tp = matching_hashes_to_addr_tp.items()
+        items_fp = matching_hashes_to_addr_fp.items()
+        if items_tp:
+            for hash, addresses in items_tp:
                 new_row = row.copy()
-                new_row["MatchingHashes"] = hash
+                new_row["MatchingHashes_TP"] = hash
                 new_row["matchingcontractaddresses"] = ','.join(addresses)
                 new_lst.append(new_row)
-        else:
+        if items_fp:
+            for hash, addresses in items_fp:
+                new_row = row.copy()
+                new_row["MatchingHashes_FP"] = hash
+                new_row["matchingcontractaddresses"] = ','.join(addresses)
+                new_lst.append(new_row)
+        if not items_tp and not items_fp:
             new_lst.append(row)
     return pd.DataFrame(new_lst, columns=REQUIRED_COLUMNS +
-                        ["MatchingHashes", "matchingcontractaddresses"])
+                        ["MatchingHashes_TP", "MatchingHashes_FP", "matchingcontractaddresses"])
 
 
 def clean_files(csv_file_path):
