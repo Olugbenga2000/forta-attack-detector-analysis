@@ -22,6 +22,7 @@ def process_file(csv_file_path):
     # Concatenate the list of DataFrames into a single DataFrame
     merged_df = pd.concat(combined_dfs, ignore_index=True)
     merged_df.to_csv('Final_data.csv')
+    print("Created Final_data.csv")
 
 
 if __name__ == '__main__':

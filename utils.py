@@ -84,7 +84,6 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
         # This is needed to get the next page of alerts.
         end_cursor = data['pageInfo']['endCursor']
         query_variables['input']['after'] = end_cursor
-    # print(all_alerts)
     return all_alerts
 
 
@@ -101,35 +100,36 @@ def find_matching_hashes(df, alerts):
 
         # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
         for alert in alerts:
-            bloomFilter = alert["addressBloomFilter"]
-            if bloomFilter["itemCount"] > 0:
-                b = BloomFilter(
-                    {'k': bloomFilter["k"], 'm': bloomFilter["m"], 'bitset': bloomFilter["bitset"]})
-                for contract in protocol_contracts:
-                    if contract.strip() in alert['addresses'] or b.has(contract):
-                        tp = False
-                        for addr in row['Attacker'].split(','):
-                            if addr.strip() in alert['addresses'] or b.has(addr):
-                                matching_hashes_to_addr_tp[alert['hash']].append(
+            if alert['addresses']:
+                bloomFilter = alert["addressBloomFilter"]
+                if bloomFilter and bloomFilter["itemCount"] > 0:
+                    b = BloomFilter(
+                        {'k': bloomFilter["k"], 'm': bloomFilter["m"], 'bitset': bloomFilter["bitset"]})
+                    for contract in protocol_contracts:
+                        if contract.strip() in alert['addresses'] or b.has(contract):
+                            tp = False
+                            for addr in row['Attacker'].split(','):
+                                if addr.strip() in alert['addresses'] or b.has(addr):
+                                    matching_hashes_to_addr_tp[alert['hash']].append(
+                                        contract)
+                                    tp = True
+                                    break
+                            if not tp:
+                                matching_hashes_to_addr_fp[alert['hash']].append(
                                     contract)
-                                tp = True
-                                break
-                        if not tp:
-                            matching_hashes_to_addr_fp[alert['hash']].append(
-                                contract)
-            else:
-                for contract in protocol_contracts:
-                    if contract.strip() in alert['addresses']:
-                        tp = False
-                        for addr in row['Attacker'].split(','):
-                            if addr.strip() in alert['addresses']:
-                                matching_hashes_to_addr_tp[alert['hash']].append(
+                else:
+                    for contract in protocol_contracts:
+                        if contract.strip() in alert['addresses']:
+                            tp = False
+                            for addr in row['Attacker'].split(','):
+                                if addr.strip() in alert['addresses']:
+                                    matching_hashes_to_addr_tp[alert['hash']].append(
+                                        contract)
+                                    tp = True
+                                    break
+                            if not tp:
+                                matching_hashes_to_addr_fp[alert['hash']].append(
                                     contract)
-                                tp = True
-                                break
-                        if not tp:
-                            matching_hashes_to_addr_fp[alert['hash']].append(
-                                contract)
 
         items_tp = matching_hashes_to_addr_tp.items()
         items_fp = matching_hashes_to_addr_fp.items()
@@ -175,6 +175,7 @@ def clean_files(csv_file_path):
     # Data cleaning on 'ProtocolContracts'
     # Convert to lowercase
     df['ProtocolContracts'] = df['ProtocolContracts'].str.lower()
+    df['Attacker'] = df['Attacker'].str.lower()
     df['ProtocolContracts'] = df['ProtocolContracts'].apply(lambda x: ','.join(filter(
         lambda y: y.startswith('0x') and len(y) == 42, x.split(','))))  # Filter and join valid values
 
