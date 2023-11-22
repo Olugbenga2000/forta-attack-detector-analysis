@@ -20,6 +20,7 @@ query exampleQuery($input: AlertsInput) {
       hash
       chainId
       truncated
+      metadata
       addressBloomFilter{
         k
         m
@@ -60,6 +61,7 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
      # query Forta API
         payload = dict(query=query, variables=query_variables)
         try:
+            
             response = requests.request(
                 "POST", forta_api, json=payload, headers=headers)
             response.raise_for_status()
@@ -68,6 +70,8 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
                 data = response.json()['data']['alerts']
                 alerts = data['alerts']
                 all_alerts += alerts
+            else:
+                print(f"Error: {response.status_code}")
         except requests.exceptions.HTTPError as errh:
             print("HTTP Error")
             print(errh.args[0])
@@ -86,6 +90,19 @@ def get_alerts(start_date: str, end_date: str, chainid: str, bots: str) -> str:
         query_variables['input']['after'] = end_cursor
     return all_alerts
 
+def get_addresses(alert) -> set:
+    addresses = set()
+    if alert['addresses'] is not None:
+        for address in alert['addresses']:
+            addresses.add(address)
+
+    
+    if alert['metadata'] is not None:
+        metadata = alert['metadata']
+        for key in metadata.keys():
+            if "involvedAddresses" in key:
+                addresses.add(metadata[key])
+    return addresses
 
 def find_matching_hashes(df, alerts):
     # Create an empty list to store the matching hashes for each row
@@ -100,16 +117,17 @@ def find_matching_hashes(df, alerts):
 
         # Check each value in 'ProtocolContracts' against all addresses in the list of dictionaries
         for alert in alerts:
-            if alert['addresses']:
+            addresses = get_addresses(alert)
+            if len(addresses)>0:
                 bloomFilter = alert["addressBloomFilter"]
                 if bloomFilter and bloomFilter["itemCount"] > 0:
                     b = BloomFilter(
                         {'k': bloomFilter["k"], 'm': bloomFilter["m"], 'bitset': bloomFilter["bitset"]})
                     for contract in protocol_contracts:
-                        if contract.strip() in alert['addresses'] or b.has(contract):
+                        if contract.strip() in addresses or b.has(contract):
                             tp = False
                             for addr in row['Attacker'].split(','):
-                                if addr.strip() in alert['addresses'] or b.has(addr):
+                                if addr.strip() in addresses or b.has(addr):
                                     matching_hashes_to_addr_tp[alert['hash']].append(
                                         contract)
                                     tp = True
@@ -119,10 +137,10 @@ def find_matching_hashes(df, alerts):
                                     contract)
                 else:
                     for contract in protocol_contracts:
-                        if contract.strip() in alert['addresses']:
+                        if contract.strip() in addresses:
                             tp = False
                             for addr in row['Attacker'].split(','):
-                                if addr.strip() in alert['addresses']:
+                                if addr.strip() in addresses:
                                     matching_hashes_to_addr_tp[alert['hash']].append(
                                         contract)
                                     tp = True
@@ -154,7 +172,7 @@ def find_matching_hashes(df, alerts):
 def clean_files(csv_file_path):
     # Read the CSV file into a DataFrame
     df = pd.read_csv(csv_file_path)
-
+    print(len(df))
     # Check if all required columns are present
 
     missing_columns = set(REQUIRED_COLUMNS) - set(df.columns)
@@ -165,10 +183,10 @@ def clean_files(csv_file_path):
     # Filter rows based on the 'Network' column
 
     df = df[df['Network'].isin(VALID_NETWORKS)]
-
+    print(len(df))
     # Drop rows with NaN values in 'ProtocolContracts' column
     df = df.dropna(subset=['ProtocolContracts'])
-
+    print(len(df))
     # Drop unnecessary columns
     df = df.loc[:, REQUIRED_COLUMNS]
 
@@ -178,5 +196,5 @@ def clean_files(csv_file_path):
     df['Attacker'] = df['Attacker'].str.lower()
     df['ProtocolContracts'] = df['ProtocolContracts'].apply(lambda x: ','.join(filter(
         lambda y: y.startswith('0x') and len(y) == 42, x.split(','))))  # Filter and join valid values
-
+    print(len(df))
     return df
