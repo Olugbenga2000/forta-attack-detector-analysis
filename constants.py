@@ -5,6 +5,6 @@ REQUIRED_COLUMNS = ['Attack Name', 'Network', 'ProtocolContracts', 'Attacker']
 
 # start and end date needs to be in the format: YYYY-MM-DD
 START_DATE = "2023-09-01"
-END_DATE = "2023-09-30"
+END_DATE = "2023-11-01"
 
 BOTS = ['0x80ed808b586aeebe9cdd4088ea4dea0a8e322909c0e4493c993e060e89c09ed1']
