@@ -1,5 +1,5 @@
 VALID_NETWORKS = ['BSC', 'Mainnet', 'Arb', 'Polygon', 'Fantom', 'Opt', 'Avax']
-NETWORKS_TO_ID = {'BSC': '56', 'Mainnet': '1', 'Arb': '42161',
+≈çNETWORKS_TO_ID = {'BSC': '56', 'Mainnet': '1', 'Arb': '42161',
                   'Opt': '10', 'Fantom': '250', 'Polygon': '137', 'Avax': '43114'}
 REQUIRED_COLUMNS = ['Attack Name', 'Network', 'ProtocolContracts', 'Attacker']
 

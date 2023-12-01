@@ -154,20 +154,34 @@ def find_matching_hashes(df, alerts):
         if items_tp:
             for hash, addresses in items_tp:
                 new_row = row.copy()
+                addresses_sorted = list(set(addresses))
+                addresses_sorted.sort()
                 new_row["MatchingHashes_TP"] = hash
-                new_row["matchingcontractaddresses"] = ','.join(addresses)
+                new_row["matchingcontractaddresses"] = ','.join(addresses_sorted)
+                new_row["IsPreparationAlert"] = is_preparation_alert(hash, alerts)
                 new_lst.append(new_row)
         if items_fp:
             for hash, addresses in items_fp:
                 new_row = row.copy()
+                addresses_sorted = list(set(addresses))
+                addresses_sorted.sort()
                 new_row["MatchingHashes_FP"] = hash
-                new_row["matchingcontractaddresses"] = ','.join(addresses)
+                new_row["matchingcontractaddresses"] = ','.join(addresses_sorted)
+                new_row["IsPreparationAlert"] = is_preparation_alert(hash, alerts)
                 new_lst.append(new_row)
         if not items_tp and not items_fp:
             new_lst.append(row)
     return pd.DataFrame(new_lst, columns=REQUIRED_COLUMNS +
-                        ["MatchingHashes_TP", "MatchingHashes_FP", "matchingcontractaddresses"])
+                        ["MatchingHashes_TP", "MatchingHashes_FP", "IsPreparationAlert", "matchingcontractaddresses"])
 
+
+def is_preparation_alert(hash, alerts) -> bool:
+    for alert in alerts:
+        if(alert['hash']==hash):
+            metadata = alert['metadata']
+            if "anomalyScoreStageExploitation" in metadata or "anomalyScoreStageMoneyLaundering" in metadata:
+                return False
+    return True
 
 def clean_files(csv_file_path):
     # Read the CSV file into a DataFrame
